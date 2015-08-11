@@ -1,0 +1,71 @@
+body
+{
+    background: url("../images/background.jpg");
+    background-size: cover;
+}
+
+#outer
+{
+    width: 100%;
+    padding: 0;
+    display: table;
+    height: 100%;
+    position: absolute;
+    top: 0;
+    left: 0;
+    margin: 0;   
+}
+
+#inner
+{
+    padding: 0;
+    vertical-align: middle;
+    display: table-cell;
+    margin: 0;
+}
+
+#content
+{
+    width: 300px;
+    background-color: rgba(1,1,1,0.7);
+    margin: 0 auto;
+    padding: 10px;
+    color: white;
+}
+
+#title
+{
+    text-align: center;
+}
+
+#btn_start
+{
+    background-color: orange;
+    text-align: center;
+    padding: 10px;
+    cursor: pointer;
+    margin-top: 15px;
+    margin-bottom: 15px;
+    color: black;
+}
+
+.server
+{
+    margin-bottom: 5px;
+}
+
+.name
+{
+    display: inline-block;
+}
+
+.progression
+{
+    display: inline-block;
+    float: right;
+}
+
+.complete
+{
+    color: green;
+}
