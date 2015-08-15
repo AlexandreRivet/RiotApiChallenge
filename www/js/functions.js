@@ -19,7 +19,7 @@ function getStats() {
 
     $("#servers_list").append(div);
     
-    $.getJSON("resources/bilgewater_matchID/" + REGION + ".json", function(data) {
+    $.getJSON("../resources/bilgewater_matchID/" + REGION + ".json", function(data) {
         
         STATS = {"number": data.length, "ids": data, "analysed": 0};
         

@@ -9,7 +9,7 @@
     
     <script src="libs/jquery-2.1.3.js"></script>
     
-    <script src="js/functions.js"></script>
+    <script src="../js/functions.js"></script>
     
 </head>
 
