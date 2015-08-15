@@ -10,9 +10,11 @@
         
         $stats = array();
         
+        /*** GLOBAL INFO ***/
+        
         $stats["info"]["number"] = 10000;
         
-        // Get All champions
+        /*** CHAMPION INFO ***/
         $statement = $bdd->prepare('SELECT * FROM champion'); 
 		$statement->execute();
 		$data = $statement->fetchAll();
@@ -34,6 +36,11 @@
         getNumberOfGamesBanned($stats["champions"]);
         getNumberOfGamesWon($stats["champions"]);
         getStats($stats["champions"]);
+        
+        /*** BLACK MARKET INFO ***/
+        $stats["bwmerc"] = array();
+        getKrakensSpent($stats["bwmerc"]);
+        
         
         // echo '<pre>';
         // print_r($stats);
@@ -202,6 +209,63 @@
         
     }
 
+
+    function getKrakensSpent(&$arr) {
+        
+        global $bdd;
+        
+        $krakens = 0;
+        
+        $step = 10000;
+        $offset = 0;
+        $numberOfItems = 0;
+        do {
+            
+            $statement = $bdd->prepare('SELECT * FROM event
+                                            INNER JOIN item
+                                            WHERE event.itemID = item.id
+                                            AND item.group LIKE "BWMerc%"
+                                            LIMIT '.$offset.', '.$step);
+        
+            $statement->execute();
+            $data = $statement->fetchAll();
+            
+            $numberOfItems = count($data);
+        
+            for ($i = 0; $i < $numberOfItems; $i++) {
+         
+                $item = $data[$i];
+                $group = $item["group"];
+                
+                if (strlen($group) == 8) {
+                    
+                    $krakens += 5;
+                    
+                } else {
+                    
+                    $level = intval(substr($group, -1));
+                    
+                    if ($level == 1) {
+                        
+                        $krakens += 5;
+                        
+                    } else {
+                        
+                        $krakens += 2 * ($level - 1) * 5;
+                        
+                    }
+                    
+                }
+                
+            }
+            
+            $offset += $step;
+            
+        } while($numberOfItems != 0);
+        
+        $arr["numberKrakens"] = $krakens;
+        
+    }
 
 
 /*
