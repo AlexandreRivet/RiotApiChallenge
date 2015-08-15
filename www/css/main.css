@@ -49,6 +49,11 @@ body
     color: black;
 }
 
+.input_offset
+{
+    width: 100px;
+}
+
 .server
 {
     margin-bottom: 5px;

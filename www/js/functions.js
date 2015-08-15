@@ -1,110 +1,100 @@
-var REGIONS;
-var STATS = {};
+var REGION = 'br';
+var START = 0;
+var END = 9;
 
-function getAllGameStats()
-{
-    var regions = new Array();
+
+
+var CURRENT;
+var TIMER_ID;
+var STATS;
+
+function getStats() {
+ 
+    var region = REGION.toUpperCase();
+            
+    var div = '<div class="server" id="' + REGION + '">';
+    div += '<div class="name">' + region + '</div>';
+    div += '<div class="progression">?/?</div>';
+    div += '</div>';
+
+    $("#servers_list").append(div);
     
-    $.ajax({
-        type: "POST",
-        url: "functions.php",
-        data: {method: "getRegions"}
+    $.getJSON("resources/bilgewater_matchID/" + REGION + ".json", function(data) {
         
-    }).done(function(result) {
+        STATS = {"number": data.length, "ids": data, "analysed": 0};
         
-        REGIONS = JSON.parse(result);
+        TIMER_ID = setInterval(function() { getMatch() }, 15);        
         
-        for (var i = 0; i < REGIONS.length; i++) {
-         
-            var region = REGIONS[i].toUpperCase();
-            
-            var div = '<div class="server" id="' + REGIONS[i] + '">';
-            div += '<div class="name">' + region + '</div>';
-            div += '<div class="progression">0%</div>';
-            div += '</div>';
-            
-            $("#servers_list").append(div);
-            
-        }
+    }).fail(function() {
         
-        getRegionStats(0);
+        console.error("Can't find " + REGION + ".json"); 
         
     });
     
+    
 }
 
-function getRegionStats(index) 
-{    
-    var region = REGIONS[index];
+function getMatch() {
     
-    console.log(region + ' is currently being analysed.');
+    console.log(CURRENT + " - " + (END + 1));
     
-    if (region == undefined) {
-     
+    if ( CURRENT == END + 1 ) {
         
-        
+        clearInterval(TIMER_ID);
         return;
         
     }
-        
-    $.getJSON("resources/bilgewater_matchID/" + region + ".json", function(data) {
-        
-        var numberOfGames = data.length;
-        
-        STATS[region] = {"number": numberOfGames, "id": data, "matches": {}, "analysed": 0};
-        
-        getMatchStats(index, 0);
-        
-    }).fail(function() {
-      
-        console.error("Can't find " + region + ".json");
-        
-    });
+    
+    var match_id = STATS.ids[CURRENT];
+    
+    getMatchStat(REGION, match_id);
+    
+    CURRENT++;   
+    
 }
 
-function getMatchStats(indexR, indexM) {
+function getMatchStat(region, match_id) {
  
-    var region = REGIONS[indexR];
-    var match_id = STATS[region].id[indexM];
-    
     $.ajax({
-        
+       
         type: "POST",
         url: "functions.php",
-        dataType: "json",        
-        data: {"method": "getMatch", "region": region, "match_id": match_id}
-    
+        data: {"method": "getMatch", "region": region, "match_id": match_id}        
+        
     }).done(function(result) {
-        
-        STATS[region].matches[match_id] = result;
-        STATS[region].analysed++;
-        
-        var percent = STATS[region].analysed / STATS[region].number * 100;
-        $("#" + region + " .progression").html(percent.toFixed(2) + "%");
-        
-        if (indexM === STATS[region].number) {
-         
-            getRegionStats(indexR + 1);
-            
+
+        STATS.analysed++;
+        var percent = STATS.analysed / (END - START + 1) * 100;
+
+        $("#" + region + " .progression").html(STATS.analysed + "/" + (END - START + 1));
+
+        if (percent > 99.9) {
+
+            $("#" + region + " .progression").addClass("complete");
+
         }
-        
-        getMatchStats(indexR, indexM + 1);
-        
+              
     }).fail(function() {
         
-        console.error("Fail on " + match_id);
-        
-        getMatchStats(indexR, indexM + 1);
-        
-    });
-}
-
-$(document).ready(function() {
-   
-    $("#btn_start").click(function() {
-        
-        getAllGameStats();
+        getMatchStat(region, match_id);
         
     });
     
+}
+
+
+$(document).ready(function() {
+    
+    $("#btn_start").click(function() {
+    
+        REGION = $("#select_region").val();
+        START = parseInt($("#input_start").val());
+        END = parseInt($("#input_end").val());
+    
+        CURRENT = START;
+        
+        getStats();
+        
+    });
+        
 });
