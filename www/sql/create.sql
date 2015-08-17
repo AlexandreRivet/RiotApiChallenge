@@ -1,7 +1,7 @@
 /* Biglewater schema for challenge */
-CREATE SCHEMA `bilgewater`;
+CREATE SCHEMA `bilgewater_eune`;
 
-USE `bilgewater`;
+USE `bilgewater_eune`;
 
 /* champion table */
 CREATE TABLE `champion`

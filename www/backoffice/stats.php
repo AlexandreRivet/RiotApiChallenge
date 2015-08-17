@@ -4,6 +4,9 @@
 
     $region = isset($_GET["region"]) ? $_GET["region"] : "br";
 
+    /**
+    * Function generate file with all stats for one region
+    */
     function generateStats() {
      
         global $bdd, $region;
@@ -11,8 +14,12 @@
         $stats = array();
         
         /*** GLOBAL INFO ***/
+        $statement = $bdd->prepare('SELECT count(*) FROM `match`
+                                        WHERE region = "'.$region.'"'); 
+		$statement->execute();
+		$data = $statement->fetchAll()[0][0];
         
-        $stats["info"]["number"] = 10000;
+        $stats["info"]["number"] = $data;
         
         /*** CHAMPION INFO ***/
         $statement = $bdd->prepare('SELECT * FROM champion'); 
@@ -40,10 +47,15 @@
         /*** BLACK MARKET INFO ***/
         $stats["bwmerc"] = array();
         getKrakensSpent($stats["bwmerc"]);
+        getBrawlersStats($stats["bwmerc"]);
+        getBestCompositionOfBrawlers($stats["bwmerc"]);
         
+        /*** ITEMS INFO ***/
+        $stats["items"] = array();
+        getItemsStats($stats["items"]);
         
-        // echo '<pre>';
-        // print_r($stats);
+        echo '<pre>';
+        print_r($stats);
         
         $fp = fopen($region.'.json', 'w');
         fwrite($fp, json_encode($stats));
@@ -51,9 +63,12 @@
         
     }
 
+    /**
+    * Function get number of games played for each champion
+    */
     function getNumberOfGamesPlayed(&$arr) {
      
-        global $bdd;
+        global $bdd, $region;
         
         $count = count($arr);
         
@@ -61,7 +76,11 @@
             
             $id = $arr[$i]["id"];
             
-            $statement = $bdd->prepare('SELECT count(*) FROM participant WHERE championID = :championID');
+            $statement = $bdd->prepare('SELECT count(*) FROM participant
+                                        INNER JOIN `match` 
+                                        WHERE championID = :championID
+                                        AND participant.matchID = match.id
+                                        AND match.region =  "'.$region.'"');
             $statement->execute(array(':championID' => $id));
             
             $arr[$i]["stats"]["numberOfGamesPlayed"] = $statement->fetchAll()[0][0];            
@@ -70,9 +89,12 @@
         
     }
 
+    /**
+    * Function get number of games banned for each champion
+    */
     function getNumberOfGamesBanned(&$arr) {
         
-        global $bdd;
+        global $bdd, $region;
         
         $count = count($arr);
         
@@ -80,7 +102,11 @@
             
             $id = $arr[$i]["id"];
             
-            $statement = $bdd->prepare('SELECT count(*) FROM banned_champion WHERE championID = :championID');
+            $statement = $bdd->prepare('SELECT count(*) FROM banned_champion 
+                                        INNER JOIN `match`
+                                        WHERE championID = :championID
+                                        AND banned_champion.matchID = match.id
+                                        AND match.region = "'.$region.'"');
             $statement->execute(array(':championID' => $id));
             
             $arr[$i]["stats"]["numberOfGamesBanned"] = $statement->fetchAll()[0][0];            
@@ -89,9 +115,12 @@
            
     }
 
+    /**
+    * Function get number of games won for each champion
+    */
     function getNumberOfGamesWon(&$arr) {
         
-        global $bdd;
+        global $bdd, $region;
         
         $count = count($arr);
         
@@ -101,10 +130,13 @@
             
             $statement = $bdd->prepare('SELECT count(*) FROM participant
                                         INNER JOIN team
+                                        INNER JOIN `match`
                                         WHERE participant.matchID = team.matchID
+                                        AND participant.matchID = match.id
                                         AND participant.teamID = team.teamID
                                         AND participant.championID = :championID
-                                        AND team.winner = 1');
+                                        AND team.winner = 1
+                                        AND match.region = "'.$region.'"');
             $statement->execute(array(':championID' => $id));
             
             $arr[$i]["stats"]["numberOfGamesWon"] = $statement->fetchAll()[0][0];            
@@ -113,9 +145,12 @@
         
     }
 
+    /**
+    * Function get stats for each champion
+    */
     function getStats(&$arr) {
         
-        global $bdd;
+        global $bdd, $region;
         
         $count = count($arr);
         
@@ -129,9 +164,12 @@
                                         MAX(stats.kills), MAX(stats.deaths), MAX(stats.assists), ((AVG(stats.kills) + AVG(stats.assists)) / AVG(stats.deaths))
                                         FROM stats
                                         INNER JOIN participant
+                                        INNER JOIN `match`
                                         WHERE stats.matchID = participant.matchID
+                                        AND participant.matchID = match.id
                                         AND stats.participantID = participant.id
-                                        AND participant.championID = :championID');
+                                        AND participant.championID = :championID
+                                        AND match.region = "'.$region.'"');
             $statement->execute(array(':championID' => $id));
             
             $data = $statement->fetchAll()[0];
@@ -155,9 +193,12 @@
             $statement = $bdd->prepare('SELECT item0, item1, item2, item3, item4, item5, item6
                                         FROM stats
                                         INNER JOIN participant
+                                        INNER JOIN `match`
                                         WHERE stats.matchID = participant.matchID
+                                        AND participant.matchID = match.id
                                         AND stats.participantID = participant.id
-                                        AND participant.championID = :championID');
+                                        AND participant.championID = :championID
+                                        AND match.region = "'.$region.'"');
             $statement->execute(array(':championID' => $id));
             $data = $statement->fetchAll();
             $countData = count($data);
@@ -209,32 +250,40 @@
         
     }
 
-
+    /**
+    * Function get number of krakens spent
+    */
     function getKrakensSpent(&$arr) {
         
-        global $bdd;
+        global $bdd, $region;
+        
+        $statement = $bdd->prepare('SELECT id from `match` WHERE region = "'.$region.'"');
+        
+        $statement->execute();
+        $data = $statement->fetchAll();
+        
+        $numberOfGames = count($data);
         
         $krakens = 0;
         
-        $step = 10000;
-        $offset = 0;
-        $numberOfItems = 0;
-        do {
+        for ($i = 0; $i < $numberOfGames; $i++) {
+    
+            $id = $data[$i]["id"];
             
             $statement = $bdd->prepare('SELECT * FROM event
                                             INNER JOIN item
                                             WHERE event.itemID = item.id
-                                            AND item.group LIKE "BWMerc%"
-                                            LIMIT '.$offset.', '.$step);
+                                            AND event.matchID = '.$id.'
+                                            AND item.group LIKE "BWMerc%"');
         
             $statement->execute();
-            $data = $statement->fetchAll();
-            
-            $numberOfItems = count($data);
+            $items = $statement->fetchAll();
+
+            $numberOfItems = count($items);
         
-            for ($i = 0; $i < $numberOfItems; $i++) {
+            for ($j = 0; $j < $numberOfItems; $j++) {
          
-                $item = $data[$i];
+                $item = $items[$j];
                 $group = $item["group"];
                 
                 if (strlen($group) == 8) {
@@ -259,199 +308,212 @@
                 
             }
             
-            $offset += $step;
             
-        } while($numberOfItems != 0);
+            
+        }
         
         $arr["numberKrakens"] = $krakens;
         
     }
 
+    /**
+    * Function get stats for brawlers
+    */
+    function getBrawlersStats(&$arr) {
+        
+        global $bdd, $region;
+        
+        $arr["brawlers"] = array();
+        
+        // Get Razorfin
+        getBrawlerStats($arr, 3611);
+        
+        // Get Ironback
+        getBrawlerStats($arr, 3612);
+        
+        // Get Plundercrab
+        getBrawlerStats($arr, 3613);
+        
+        // Get Ocklepod
+        getBrawlerStats($arr, 3614);        
+        
+    }
 
-/*
-    function calcPickRate() {
-     
-        echo "*** PICKRATE ***<br>";
-        
-        include("env.php");
-        
-        $statement = $bdd->prepare('SELECT * FROM champion'); 
-		$statement->execute();
-		$data = $statement->fetchAll();
-        
-        $numberOfChampions = count($data);
+    /**
+    * Function get stats for one brawler with his id
+    */
+    function getBrawlerStats(&$arr, $id) {
     
-        $statement = $bdd->prepare('SELECT count(*) FROM `match`');
+        global $bdd, $region;
+        
+        $statement = $bdd->prepare('SELECT count(*) FROM event
+                                        INNER JOIN `match`
+                                        WHERE event.itemID = '.$id.'
+                                        AND event.matchID = match.id
+                                        AND match.region = "'.$region.'"');
+        
         $statement->execute();
-        $numberOfGames = $statement->fetchAll()[0][0];
+        $number = $statement->fetchAll()[0][0];
         
-        echo $numberOfGames." games analysed.<br>";
-        
-        for ($i = 0; $i < $numberOfChampions; $i++) {
-         
-            $champion = $data[$i];
-            $id = $champion["id"];
-            
-            $statement = $bdd->prepare('SELECT count(*) FROM participant WHERE championID = :championID');
-            $statement->execute(array(':championID' => $id));
-            $numberOfThisChampion = $statement->fetchAll()[0][0];
-            
-            $percent = round((($numberOfThisChampion / $numberOfGames) * 100), 2);
-            
-            echo $champion["name"]." : ".$percent."%<br>";
-            
-        }
+        $arr["brawlers"][$id] = array();
+        $arr["brawlers"][$id]["bought"] = $number;        
         
     }
 
-    function calcBanRate() {
-        
-        echo "*** BANRATE ***<br>";
-        
-        include("env.php");
-        
-        $statement = $bdd->prepare('SELECT * FROM champion'); 
-		$statement->execute();
-		$data = $statement->fetchAll();
-        
-        $numberOfChampions = count($data);
-    
-        $statement = $bdd->prepare('SELECT count(*) FROM `match`');
-        $statement->execute();
-        $numberOfGames = $statement->fetchAll()[0][0];
-        
-        for ($i = 0; $i < $numberOfChampions; $i++) {
-         
-            $champion = $data[$i];
-            $id = $champion["id"];
-            
-            $statement = $bdd->prepare('SELECT count(*) FROM banned_champion WHERE championID = :championID');
-            $statement->execute(array(':championID' => $id));
-            $numberOfThisChampion = $statement->fetchAll()[0][0];
-            
-            echo $numberOfThisChampion."<br>";
-            
-            $percent = round((($numberOfThisChampion / $numberOfGames) * 100), 2);
-            
-            echo $champion["name"]." : ".$percent."%<br>";
-            
-        }
-        
-    }
-
-    function calcWinRate() {
-        
-        echo "*** WINRATE ***<br>";
-        
-        include("env.php");
-        
-        $statement = $bdd->prepare('SELECT * FROM champion'); 
-		$statement->execute();
-		$data = $statement->fetchAll();
-        
-        $numberOfChampions = count($data);
-    
-        for ($i = 0; $i < $numberOfChampions; $i++) {
-         
-            $champion = $data[$i];
-            $id = $champion["id"];
-            
-            /* Picked *
-            $statement = $bdd->prepare('SELECT count(*) FROM participant WHERE championID = :championID');
-            $statement->execute(array(':championID' => $id));
-            $numberOfThisChampionPicked = $statement->fetchAll()[0][0];
-            
-            $winner = 0;
-            /* Won with *
-            $statement = $bdd->prepare('SELECT count(*) FROM participant
-                                        INNER JOIN team
-                                        WHERE participant.matchID = team.matchID
-                                        AND participant.teamID = team.teamID
-                                        AND participant.championID = :championID
-                                        AND team.winner = 1');
-            $statement->execute(array(':championID' => $id));
-            $numberOfThisChampionWon = $statement->fetchAll()[0][0];
-            
-            echo $numberOfThisChampionPicked." - ".$numberOfThisChampionWon."<br>";
-            
-            $percent = ($numberOfThisChampionPicked != 0) ? ($numberOfThisChampionWon / $numberOfThisChampionPicked) * 100 : 0;
-            $percent = round($percent, 2);
-            
-            echo $champion["name"]." : ".$percent."%<br>";
-            
-        }
-        
-    }
-
-    function calcKrakensSpent() {
+    /**
+    * Function get best composition of brawlers
+    */
+    function getBestCompositionOfBrawlers(&$arr) {
      
-        echo "*** KRAKENS ***<br>";
+        global $bdd, $region;
         
-        include("env.php");
+        $compositions = array();
         
-        $krakens = 0;
+        $statement = $bdd->prepare('SELECT id from `match`
+                                        WHERE region = "'.$region.'"');
         
-        $step = 2000;
-        $offset = 0;
-        $numberOfItems = 0;
-        do {
+        $statement->execute();
+        $data = $statement->fetchAll();
+        
+        $numberOfGames = count($data);
+        
+        $combinations = array();
+        
+        for ($i = 0; $i < $numberOfGames; $i++) {
+    
+            $array_tmpB = array();
+            $array_tmpR = array();
             
-            $statement = $bdd->prepare('SELECT * FROM event
-                                            INNER JOIN item
-                                            WHERE event.itemID = item.id
-                                            AND item.group LIKE "BWMerc%"
-                                            LIMIT '.$offset.', '.$step);
+            for ($j = 1; $j <= 4; $j++) {
         
-            $statement->execute();
-            $data = $statement->fetchAll();
+                $itemID = 3610 + $j;
             
-            $numberOfItems = count($data);
-        
-            for ($i = 0; $i < $numberOfItems; $i++) {
-         
-                $item = $data[$i];
-                $group = $item["group"];
+                // Blue
+                $statement = $bdd->prepare('SELECT count(event.itemID) FROM event
+                                                WHERE event.itemID = '.$itemID.'
+                                                AND event.matchID = '.$data[$i]["id"].'
+                                                AND event.participantID < 6');
+                $statement->execute();
+                $items = $statement->fetchAll();
                 
-                if (strlen($group) == 8) {
+                $nbItem = $items[0][0];
+                
+                for ($k = 0; $k < $nbItem; $k++) {
+                
+                    array_push($array_tmpB, $j);
                     
-                    $krakens += 5;
-                    
-                } else {
-                    
-                    $level = intval(substr($group, -1));
-                    
-                    if ($level == 1) {
-                        
-                        $krakens += 5;
-                        
-                    } else {
-                        
-                        $krakens += 2 * ($level - 1) * 5;
-                        
-                    }
+                }
+                
+                // Red
+                $statement = $bdd->prepare('SELECT count(event.itemID) FROM event
+                                                WHERE event.itemID = '.$itemID.'
+                                                AND event.matchID = '.$data[$i]["id"].'
+                                                AND event.participantID >= 6');
+                $statement->execute();
+                $items = $statement->fetchAll();
+                
+                $nbItem = $items[0][0];
+                
+                for ($k = 0; $k < $nbItem; $k++) {
+                
+                    array_push($array_tmpR, $j);
                     
                 }
                 
             }
+
+            sort($array_tmpB);
+            sort($array_tmpR);
+            $combinationB = implode($array_tmpB);
+            $combinationR = implode($array_tmpR);
+    
+            if (!isset($combinations[$combinationB])) {
+             
+                $combinations[$combinationB] = 0;
+                
+            }
             
-            $offset += $step;
+            $combinations[$combinationB]++;
             
-        } while($numberOfItems != 0);
+            if (!isset($combinations[$combinationR])) {
+             
+                $combinations[$combinationR] = 0;
+                
+            }
+            
+            $combinations[$combinationR]++;
+            
+        }
         
-        echo $krakens." krakens spent.";
+        arsort($combinations);
+        
+        $firstKey = array_keys($combinations)[0];
+        
+        $arr["compositions"] = array();
+        $arr["compositions"]["mostPopular"] = array();
+        
+        $arr["compositions"]["mostPopular"]["setup"] = $firstKey;
+        $arr["compositions"]["mostPopular"]["number"] = $combinations[$firstKey];
+        
+        $arr["compositions"]["noBrawlers"] = $combinations[null];
         
     }
-*/
+
+    /**
+    * Function get stats for items
+    */
+    function getItemsStats(&$arr) {
+        
+        global $bdd, $region;
+        
+        $statement = $bdd->prepare('SELECT id from `match` WHERE region = "'.$region.'"');
+        
+        $statement->execute();
+        $data = $statement->fetchAll();
+        
+        $numberOfGames = count($data);
+        
+        $items = array();
+        
+        for ($i = 0; $i < $numberOfGames; $i++) {
+    
+            $id = $data[$i]["id"];
+            
+            $statement = $bdd->prepare('SELECT item0, item1, item2, item3, item4, item5, item6
+                                        FROM stats
+                                        WHERE stats.matchID = '.$id);
+            
+            $statement->execute();
+            $result = $statement->fetchAll();
+            
+            $countData = count($result);
+            
+            for ($j = 0; $j < $countData; $j++) {
+             
+                for ($k = 0; $k < 7; $k++) {
+                    
+                    $itemID = $result[$j][$k];
+                    
+                    if (!isset($items[$itemID])) {
+                        
+                        $items[$itemID] = 0;
+                        
+                    }
+                    
+                    $items[$itemID]++;
+                    
+                }
+                
+            }
+        }
+        
+        arsort($items);
+        
+        $arr = $items;
+        
+    }
+
+    // Launch the process
     generateStats();
-
-    /*
-    calcPickRate();
-    echo "******************************<br>";
-    calcBanRate();
-    echo "******************************<br>";
-    calcWinRate();
-    echo "******************************<br>";*/
-    // calcKrakensSpent();
-
 
 ?>
